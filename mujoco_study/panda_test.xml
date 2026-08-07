@@ -1,0 +1,67 @@
+<mujoco model="franka_panda_with_gripper">
+    <compiler angle="radian" meshdir="assets"/>
+    <option integrator="RK4" timestep="0.002"/>
+    <worldbody>
+        <!-- Environment Base Structure -->
+        <light directional="true" diffuse="0.4 0.4 0.4" specular="0.1 0.1 0.1" pos="0 0 5" dir="0 0 -1"/>
+        <geom name="floor" type="plane" size="10 10 0.1" rgba="0.8 0.8 0.8 1"/>
+        <!-- Table Top for Future Grasping Objects -->
+        <body name="table" pos="0.5 0 0">
+            <geom type="box" size="0.3 0.4 0.2" rgba="0.4 0.2 0.1 1"/>
+        </body>
+        <!-- Franka Panda Base Link -->
+        <body name="panda_link0" pos="0 0 0.4">
+            <geom type="cylinder" size="0.1 0.05" rgba="0.9 0.9 0.9 1"/>
+            <!-- Joint 1 -->
+            <body name="panda_link1" pos="0 0 0.1">
+                <joint name="panda_joint1" type="hinge" axis="0 0 1" range="-2.8973 2.8973"/>
+                <geom type="cylinder" size="0.06 0.1" rgba="0.9 0.9 0.9 1"/>
+                <!-- Joint 2 -->
+                <body name="panda_link2" pos="0 0 0.2">
+                    <joint name="panda_joint2" type="hinge" axis="0 1 0" range="-1.7628 1.7628"/>
+                    <geom type="box" size="0.06 0.06 0.1" rgba="0.9 0.9 0.9 1"/>
+                    <!-- Joint 3 -->
+                    <body name="panda_link3" pos="0 0 0.2">
+                        <joint name="panda_joint3" type="hinge" axis="0 0 1" range="-2.8973 2.8973"/>
+                        <geom type="cylinder" size="0.05 0.1" rgba="0.9 0.9 0.9 1"/>
+                        <!-- Joint 4 -->
+                        <body name="panda_link4" pos="0 0 0.2">
+                            <joint name="panda_joint4" type="hinge" axis="0 -1 0" range="-3.0718 -0.0698"/>
+                            <geom type="box" size="0.05 0.05 0.1" rgba="0.9 0.9 0.9 1"/>
+                            <!-- Joint 5 -->
+                            <body name="panda_link5" pos="0 0 0.2">
+                                <joint name="panda_joint5" type="hinge" axis="0 0 1" range="-2.8973 2.8973"/>
+                                <geom type="cylinder" size="0.04 0.1" rgba="0.9 0.9 0.9 1"/>
+                                <!-- Joint 6 -->
+                                <body name="panda_link6" pos="0 0 0.2">
+                                    <joint name="panda_joint6" type="hinge" axis="0 1 0" range="-0.0175 3.7525"/>
+                                    <geom type="box" size="0.04 0.04 0.08" rgba="0.9 0.9 0.9 1"/>
+                                    <!-- Joint 7 (Wrist) -->
+                                    <body name="panda_link7" pos="0 0 0.1">
+                                        <joint name="panda_joint7" type="hinge" axis="0 0 1" range="-2.8973 2.8973"/>
+                                        <geom type="cylinder" size="0.04 0.03" rgba="0.9 0.9 0.9 1"/>
+                                        <!-- GRIPPER MODULE -->
+                                        <body name="panda_hand" pos="0 0 0.05">
+                                            <!-- Main Hand Housing Assembly -->
+                                            <geom type="box" size="0.03 0.08 0.02" rgba="0.8 0.8 0.8 1"/>
+                                            <!-- Left Gripper Finger -->
+                                            <body name="left_finger" pos="0 0.04 0.04">
+                                                <joint name="finger_joint1" type="slide" axis="0 -1 0" range="0 0.04"/>
+                                                <geom type="box" size="0.01 0.01 0.03" rgba="0.2 0.2 0.2 1"/>
+                                            </body>
+                                            <!-- Right Gripper Finger -->
+                                            <body name="right_finger" pos="0 -0.04 0.04">
+                                                <joint name="finger_joint2" type="slide" axis="0 1 0" range="0 0.04"/>
+                                                <geom type="box" size="0.01 0.01 0.03" rgba="0.2 0.2 0.2 1"/>
+                                            </body>
+                                        </body>
+                                    </body>
+                                </body>
+                            </body>
+                        </body>
+                    </body>
+                </body>
+            </body>
+        </body>
+    </worldbody>
+</mujoco>

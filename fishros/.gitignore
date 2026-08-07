@@ -1,0 +1,40 @@
+# ROS2 build artifacts
+build/
+devel/
+log/
+install/
+
+# C++ files
+# **/*.cpp
+# **/*.h
+**/ament_cmake_*/
+**/CTest*.ini
+**/*.cmake
+**/*_node !**/*_node/
+**/*_example
+**/include/
+
+# Python files
+# **/*.py
+**/*.pyc
+
+# ROS2 log files
+**/*.log
+
+# Catkin workspace files
+.catkin/
+
+# Ignore CMake-related files
+CMakeCache.txt
+cmake_install.cmake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+
+# Ignore make-related files
+Makefile
+Makefile.in
+Makefile.am
+Makefile.mk
+
+.vscode
