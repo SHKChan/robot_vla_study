@@ -1,1 +1,4 @@
 .vscode/
+*.hdf5
+__pycache__/
+__pycache__/*
