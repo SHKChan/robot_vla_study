@@ -5,51 +5,74 @@ import torch
 import torch.nn as nn
 import torchvision.models as models
 
-# Load the PushT dataset
-dataset: LeRobotDataset = LeRobotDataset("lerobot/pusht", video_backend="pyav")
-dataloader: DataLoader = DataLoader(dataset, batch_size=32, shuffle=True)
-
-# Check data format
-sample: dict = next(iter(dataloader))
-print(sample.keys()) # dict_keys(['action', 'observation.state', 'observation.image', ...])
-
 # Mini BC network
 class PushT_BC(nn.Module):
-    def __init__(self):
+    def __init__(self, action_dim=2, state_dim=2):
         super().__init__()
         resnet: nn.Module = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
         resnet.fc = nn.Identity()
         self.vision_encoder : nn.Module = resnet # output: [B, 512]
+        # ImageNet statistics, kept as buffers so they travel with the model.
+        self.register_buffer('_mean', torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
+        self.register_buffer('_std', torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
         self.fusion: nn.Module = nn.Sequential(
-            nn.Linear(512+2, 128), # +2 for state
+            nn.Linear(512+state_dim, 128), # vision features + raw state
             nn.ReLU(),
-            nn.Linear(128, 2), # PushT action is 2D
+            nn.Linear(128, action_dim), # PushT action is 2-D
         )
 
     def forward(self, image: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
+        image = (image - self._mean) / self._std
         vis_feat: torch.Tensor = self.vision_encoder(image)
         combined: torch.Tensor = torch.cat([vis_feat, state], dim=1)
         action: torch.Tensor = self.fusion(combined)
         return action
 
+device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# Load the PushT dataset
+dataset: LeRobotDataset = LeRobotDataset("lerobot/pusht", video_backend="pyav")
+dataloader = DataLoader(dataset, batch_size=32, shuffle=True,num_workers=4, pin_memory=True, drop_last=True)
+
+#--- Normalization statistics--
+# Must be standardized to roughly zero mean and unit variance
+stats: dict = dataset.meta.stats
+a_mean: torch.Tensor = torch.as_tensor(stats['action']['mean'], dtype=torch.float32, device=device)
+# clamp_min guards against a dimension that never varies (std == 0-> inf).
+a_std: torch.Tensor = torch.as_tensor(stats['action']['std'], dtype=torch.float32, device=device).clamp_min(1e-6)
+s_mean: torch.Tensor = torch.as_tensor(stats['observation.state']['mean'], dtype=torch.float32, device=device)
+s_std: torch.Tensor = torch.as_tensor(stats['observation.state']['std'], dtype=torch.float32, device=device).clamp_min(1e-6)
+
+# Check data format
+sample: dict = next(iter(dataloader))
+print(sample.keys()) # dict_keys(['action', 'observation.state', 'observation.image', ...])
+
+action_dim: int = sample["action"].shape[1]
+state_dim: int = sample["observation.state"].shape[1]
+
 # Training
-model: PushT_BC = PushT_BC().cuda()
+model: PushT_BC = PushT_BC(action_dim, state_dim).to(device)
 optimizer: torch.optim = torch.optim.Adam(model.parameters(), lr=1e-4)
 criterion: nn.MSELoss = nn.MSELoss()
 
 for epoch in range(50):
+    model.train()
+    epoch_loss: float = 0.0
     for batch in dataloader:
-        image: torch.Tensor = batch["observation.image"].cuda(non_blocking=True)
-        state: torch.Tensor = batch["observation.state"].cuda(non_blocking=True)
-        action: torch.Tensor = batch["action"].cuda(non_blocking=True)
+        image: torch.Tensor = batch["observation.image"].to(device, non_blocking=True)
+        # Normalize inputs AND targets with the same statistics used later at inference time.
+        state: torch.Tensor = (batch['observation.state'].to(device)- s_mean) / s_std
+        action: torch.Tensor = (batch['action'].to(device)- a_mean) / a_std
 
         # Forward
         pred_action: torch.Tensor = model(image, state)
         loss: torch.Tensor = criterion(pred_action, action)
 
         # Backward
-        optimizer.zero_grad()
+        optimizer.zero_grad(set_to_none=True)
         loss.backward()
         optimizer.step()
 
-    print(f"Epoch: {epoch}, Loss: {loss.item()}")
+        epoch_loss += loss.item()
+
+    # Report the epoch mean, not the last batch-- single batches are noisy.
+    print(f'Epoch {epoch}: loss={epoch_loss / len(dataloader):.4f}')
