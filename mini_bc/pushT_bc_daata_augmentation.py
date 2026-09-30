@@ -60,9 +60,14 @@ batch: LeRobotBatch = next(batch_iter)
 
 # Image data augmentation
 img_transform = T.Compose([
+    T.RandomResizedCrop(224, scale=(0.8, 1.0), antialias=True),
     T.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
-    T.RandomCrop(96, padding=4, padding_mode='edge'),
 ])
+eval_transform = T.Compose([
+    T.Resize(224, antialias=True),
+    T.CenterCrop(224),
+])
+
 imgs: torch.Tensor = batch['observation.image']
 imgs_augmented: torch.Tensor = img_transform(imgs)
 episode_playback(imgs, True, title='Image')
@@ -71,16 +76,17 @@ episode_playback(imgs_augmented, True, title='Image Augmentation')
 # Actions and states normalization
 scaler: MinMaxScaler = MinMaxScaler()
 actions: torch.Tensor = batch['action']
-actions_norm: torch.Tensor = torch.from_numpy(scaler.fit_transform(actions.numpy()))
+action_mean: torch.Tensor = actions.mean(axis=0)
+action_std: torch.Tensor = actions.std(axis=0).clip(min=1e-6)
+# map targets to roughly zero mean, unit variance.
+actions_norm: torch.Tensor = (actions - action_mean) / action_std
+
+print(actions_norm.mean(0), actions_norm.std(0))   # ≈ [0, 0], [1, 1]
 plot_action_trajectories(actions, title='Actions')
 plot_action_trajectories(actions_norm, title='Normalized Actions')
 
-# scaler: StandardScaler = StandardScaler()
-# actions: torch.Tensor = batch['action']
-# scaler.fit(actions)
-# # Training normalization
-# action_norm: torch.Tensor = (actions[0] - scaler.mean_) / scaler.scale_
-# # Interference un-normalization
-# action_real: torch.Tensor = action_norm * scaler.scale_ + scaler.mean_
-# # Max-min normalization [-1, 1]
-# action_max_min_norm: torch.Tensor = 2 * (actions[0] - actions.min()) / (actions.max() - actions.min()) - 1
+# Inference: invert it, or the commands come out at the wrong scale.
+# action_real = pred * action_std + action_mean
+
+# # Min-max normalization to [-1, 1] also works:
+# action_norm = 2 * (actions - min) / (max - min)- 1
