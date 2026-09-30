@@ -31,6 +31,7 @@ for batch in dataloader:
     states = batch['observation.state']  # [B, D]
     # data visualization
     episode_playback(images, True)
+    print(states.shape)
     plot_action_trajectories(states)
     # training code...
     break

@@ -1,12 +1,13 @@
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Final, Iterator, TypedDict
 
+import numpy as np
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
-from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
+from typing import Final, Iterator, TypedDict
+from torch.utils.data import DataLoader
+from dataclasses import dataclass
+from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from bc_policy import BCPolicy
 
 @dataclass(frozen=True)
@@ -79,46 +80,26 @@ dataloader: DataLoader[LeRobotBatch] = DataLoader(
     persistent_workers=cfg.num_workers > 0,
     drop_last=True,
 )
-num_batches: Final[int] = len(dataloader)
-for epoch  in range(cfg.num_epochs):
-    model.train()
-    epoch_loss: float = 0.0
 
-    batch_iter: Iterator[LeRobotBatch] = iter(dataloader)
-    for batch in batch_iter:
-        image: torch.Tensor = batch["observation.image"].cuda(non_blocking=True)
-        state: torch.Tensor = state_stats.normalize(
-            batch["observation.state"].cuda(non_blocking=True)
-        )
-        action: torch.Tensor = action_stats.normalize(
-            batch["action"].cuda(non_blocking=True)
-        )
+model: BCPolicy = BCPolicy(2).cuda()
+model.eval()
 
-        # Forward
-        pred_action: torch.Tensor = model(image, state)
-        loss: torch.Tensor = criterion(pred_action, action)
+model.train()
+val_losses : list = []
 
-        # Backward
-        optimizer.zero_grad(set_to_none=True)
-        loss.backward()
-        optimizer.step()
+batch_iter: Iterator[LeRobotBatch] = iter(dataloader)
+frames: list = [next(batch_iter) for _ in range(20)]
+for f in frames:
+    image: torch.Tensor = f["observation.image"].cuda(non_blocking=True)
+    state: torch.Tensor = state_stats.normalize(
+        f["observation.state"].cuda(non_blocking=True)
+    )
+    action: torch.Tensor = action_stats.normalize(
+        f["action"].cuda(non_blocking=True)
+    )
+    pred: torch.Tensor = model(image, state)
+    loss: torch.Tensor = criterion(pred, action)
+    val_losses.append(loss.item())
 
-        epoch_loss += loss.item()
-
-    avg_loss: float = epoch_loss / len(dataloader)
-    if epoch  % 10 == 0:
-        print(f'Epoch: {epoch }, Loss: {avg_loss}')
-
-# Save checkpoint
-torch.save({
-    'epoch': cfg.num_epochs,
-    'model_state_dict': model.state_dict(),
-    'optimizer_state_dict': optimizer.state_dict(),
-    'loss': avg_loss,
-}, 'bc_model_checkpoint.pth')
-
-
-# Load checkpoint
-checkpoint: dict = torch.load('bc_model_checkpoint.pth')
-model.load_state_dict(checkpoint['model_state_dict'])
-model.eval()  # switch to inference mode
+loss: float = np.mean(val_losses)
+print(f"Validation loss: {loss}")
