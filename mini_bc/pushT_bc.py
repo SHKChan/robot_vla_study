@@ -96,11 +96,17 @@ def train(model: nn.Module,
 
 @torch.no_grad()                                  # no autograd graph → faster, less memory
 def evaluate(model: nn.Module,
-             criterion: nn.MSELoss | nn.CrossEntropyLoss,
+             criterion: nn.MSELoss,
              dataloader: DataLoader,
              spec: ActionStateSpecs,
              device: torch.device) -> dict[str, float]:
-    model.eval()                                  # BatchNorm uses running stats
+    """Score the model on a dataloader without updating weights.
+
+    Returns:
+        dict: 'val_loss' (MSE in normalized units) and
+              'val_px_err' (mean Euclidean action error in pixels).
+    """
+    model.eval()    # stored BatchNorm stats, dropout off
     total_loss, total_px_err, n = 0.0, 0.0, 0
 
     for batch in dataloader:
@@ -118,11 +124,15 @@ def evaluate(model: nn.Module,
         total_px_err += (pred_px - action).norm(dim=-1).sum().item()  # Euclidean px error
         n += B
 
+    # An empty loader (e.g. a small val set with drop_last=True) would divide by zero.
+    assert n > 0, "empty dataloader"
+
     ret: dict[str, float] = {'val_loss': total_loss / n,
-                             'val_px_err': total_px_err / n}
+                            'val_px_err': total_px_err / n}
     print(f"val_loss: {ret['val_loss']}, val_px_err: {ret['val_px_err']}")
 
-    return ret       # mean distance to target, in pixels
+    return ret
+
 
 if __name__ == "__main__":
     device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
